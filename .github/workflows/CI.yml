@@ -16,7 +16,8 @@ env:
   IMAGE_METADATA: image-metadata.env
   ARTIFACT_NAME: tiny-health-app-image
   TRIVY_IMAGE_REPORT: trivy-image-scan-report.txt
-
+  IMAGE_TAG: pr-${{ github.event.pull_request.number }}
+  
 jobs:
   verify:
     # Same verification idea as Lab 03: scan the source, then run the test suite.
@@ -63,17 +64,10 @@ jobs:
         # Fresh runner, so the repo needs to be checked out again here too.
         uses: actions/checkout@v6
 
-      - name: Set image tag
-        id: image-tag
-        run: |
-          TODAY="$(date -u +%Y-%m-%d)"
-          IMAGE_TAG="${TODAY}-${GITHUB_RUN_ID}"
-          echo "image_tag=$IMAGE_TAG" >> "${{ github.event.pull_request.head.sha }}"
-
       - name: Build Docker image with docker build
         run: |
           docker build \
-            -t "${IMAGE_NAME}:${{ steps.image-tag.outputs.image_tag }}" \
+            -t "${IMAGE_NAME}:${{ env.IMAGE_TAG }}" \
             .
 
       - name: Run Trivy Image Scan
