@@ -1,0 +1,177 @@
+# Copy this file to `.github/workflows/09-final-assessment-cd.yml`
+# when you start EX-12.
+#
+# This starter is intentionally incomplete.
+# It is meant to guide your thinking, not to run successfully as-is.
+#
+# Assessment target for this workflow:
+# - run after trusted code reaches `main`
+# - build one exact release image
+# - push it to the registry
+# - deploy it to the remote Linux host over SSH
+# - validate what is running
+#
+# Keep the course story visible:
+# package -> deliver
+name: 09 Final Assessment CD
+
+# TODO:
+# Add the trigger block yourself.
+# This workflow should run only after trusted code reaches `main`.
+# Keep the trigger easy to explain to another student.
+on: {}
+
+env:
+  IMAGE_NAME: tiny-health-app
+  APP_PORT: "8000"
+  # Keep one exact image name for the whole assessment.
+  # The tag will change per run, but the image name should stay stable.
+
+jobs:
+  build-and-push:
+    name: Build and push release image
+    runs-on: ubuntu-latest
+    #
+    # Build order for this job:
+    # 1. confirm required secrets exist
+    # 2. check out the code
+    # 3. create one traceable image tag
+    # 4. create the full image reference
+    # 5. prepare Buildx
+    # 6. log in to the registry
+    # 7. show the image reference in logs
+    # 8. build and push the release image
+
+    outputs:
+      image_tag: "${{ steps.image-tag.outputs.value }}"
+      image_ref: "${{ steps.image-ref.outputs.value }}"
+    #
+    # Why outputs exist here:
+    # - the deploy job must use the exact same image values created in this build job
+    # - `GITHUB_OUTPUT` writes step outputs
+    # - job outputs expose those values to the next job
+    # - `needs.build-and-push.outputs...` reads them in deploy
+    #
+    # Keep this pattern simple.
+    # Do not add extra output variables unless they directly help the story.
+
+    steps:
+      - name: Check required GitHub secrets
+        env:
+          REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          # TODO:
+          # Step 1:
+          # fail clearly if any required secret is missing
+          exit 1
+
+      - name: Check out repository
+        uses: "REPLACE_WITH_CHECKOUT_ACTION"
+
+      - name: Create image tag
+        id: image-tag
+        run: |
+          # TODO:
+          # Step 3:
+          # create one traceable tag from UTC date and GITHUB_RUN_ID
+          # then write it to GITHUB_OUTPUT with the key `value`
+          # This keeps the later deploy job tied to one exact built image.
+          exit 1
+
+      - name: Create full image reference
+        id: image-ref
+        run: |
+          # TODO:
+          # Step 4:
+          # combine REGISTRY_HOST, IMAGE_NAME, and the image tag
+          # then write it to GITHUB_OUTPUT with the key `value`
+          # This gives deploy one exact image reference to pull.
+          exit 1
+
+      - name: Set up Docker Buildx
+        uses: "REPLACE_WITH_SETUP_BUILDX_ACTION"
+        # TODO:
+        # Step 5:
+        # add the Buildx setup action used earlier in the course.
+
+      - name: Log in to registry
+        uses: "REPLACE_WITH_DOCKER_LOGIN_ACTION"
+        # TODO:
+        # Step 6:
+        # Add the login inputs so GitHub Actions can authenticate to the registry.
+        # Use the registry host, username, and password secrets already listed above.
+
+      - name: Show image reference
+        run: |
+          # TODO:
+          # Step 7:
+          # print the exact image reference that will be pushed
+          exit 1
+
+      - name: Build and push release image
+        uses: "REPLACE_WITH_BUILD_PUSH_ACTION"
+        # TODO:
+        # Step 8:
+        # Add the build inputs so this step:
+        # - builds from the repository
+        # - pushes to the registry
+        # - uses the exact image reference produced earlier
+
+  deploy-to-host:
+    name: Deploy to remote host
+    needs:
+      - build-and-push
+    runs-on: ubuntu-latest
+    #
+    # Build order for this job:
+    # 1. connect to the remote host over SSH
+    # 2. confirm Docker is ready there
+    # 3. log in to the registry on the remote host
+    # 4. pull the exact image
+    # 5. replace the running container safely
+    # 6. wait for health locally on the host
+    # 7. check version and status on the host
+    # 8. validate the deployed app from the GitHub runner
+    #
+    # Keep this job straightforward.
+    # Do not add `always()` or extra cleanup logic unless your instructor asks for it.
+
+    steps:
+      - name: Deploy image over SSH
+        uses: "REPLACE_WITH_SSH_ACTION"
+        env:
+          REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          IMAGE_REF: ${{ needs.build-and-push.outputs.image_ref }}
+          COMMIT_SHA: ${{ github.sha }}
+          APP_PORT: ${{ env.APP_PORT }}
+        # TODO:
+        # Steps 1 to 7:
+        # Add the SSH action inputs yourself.
+        # This step should:
+        # - connect with DEPLOY_HOST, DEPLOY_USER, and DEPLOY_SSH_KEY
+        # - pass the registry and image values into the remote shell
+        # - run a remote script that:
+        #   1. confirms Docker exists on the remote host
+        #   2. logs in to the registry on the remote host
+        #   3. pulls the exact image reference
+        #   4. removes the old container safely if it exists
+        #   5. runs the new container on port 8000
+        #   6. passes APP_ENV, APP_VERSION, COMMIT_SHA, DEPLOYED_AT, IMAGE_TAG, and DEPLOY_MODE
+        #   7. waits for /health on 127.0.0.1:${APP_PORT}
+        #   8. checks /version and /status on the remote host
+
+      - name: Validate deployed app from GitHub Actions
+        run: |
+          # TODO:
+          # Step 8:
+          # validate /health, /version, and /status from the runner
+          # using http://${{ secrets.DEPLOY_HOST }}:${APP_PORT}
+          exit 1
