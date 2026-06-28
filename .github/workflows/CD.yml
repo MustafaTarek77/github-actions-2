@@ -34,13 +34,10 @@ jobs:
       - name: Pull image from ECR
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          # Using the PR head SHA so it matches the image built during the CI phase
-          IMAGE_TAG: pr-${{ github.event.pull_request.number }}
         run: |
-          ECR_IMAGE="${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          ECR_IMAGE="${ECR_REGISTRY}/${IMAGE_NAME}:latest"
           echo "Pulling image: $ECR_IMAGE"
           docker pull "$ECR_IMAGE"
-          # Create a local environment variable for subsequent steps to use safely
           echo "FULL_IMAGE_REF=$ECR_IMAGE" >> $GITHUB_ENV
 
       - name: Stop and remove old container if exists
