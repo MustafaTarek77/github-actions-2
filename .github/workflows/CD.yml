@@ -1,25 +1,20 @@
 name: CD phase
-
 on:
   pull_request:
     branches:
       - main
     types:
       - closed
-
 env:
   IMAGE_NAME: tiny-health-app
   CONTAINER_NAME: tiny-health-container
   APP_PORT: "8000"
-
 jobs:
   deploy-package:
     # Only run if the pull request was actually merged, not just closed.
     if: github.event.pull_request.merged == true
-    # Change this to 'self-hosted' so it executes directly on your EC2 instance!
-    runs-on: self-hosted
-
-    steps:        
+    runs-on: ubuntu-latest
+    steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,43 +26,55 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Pull image from ECR
+      - name: Deploy to EC2 over SSH
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
         run: |
           ECR_IMAGE="${ECR_REGISTRY}/${IMAGE_NAME}:latest"
-          echo "Pulling image: $ECR_IMAGE"
-          docker pull "$ECR_IMAGE"
-          echo "FULL_IMAGE_REF=$ECR_IMAGE" >> $GITHUB_ENV
 
-      - name: Stop and remove old container if exists
-        run: |
-          docker stop "${CONTAINER_NAME}" || true
-          docker rm "${CONTAINER_NAME}" || true
+          # Write the SSH private key to a temp file with correct permissions
+          install -m 600 -D /dev/null ~/.ssh/deploy_key
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
 
-      - name: Start new container
-        run: |
-          docker run -d \
-            --name "${CONTAINER_NAME}" \
-            -p "${APP_PORT}:8000" \
-            --restart unless-stopped \
-            "$env.FULL_IMAGE_REF"
+          # Avoid interactive host-key prompt
+          ssh-keyscan -H "${EC2_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Show running containers
-        run: docker ps
+          ssh -i ~/.ssh/deploy_key "${EC2_USER}@${EC2_HOST}" bash -s <<EOF
+            set -e
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
-      - name: Smoke test deployed app
-        run: |
-          for attempt in 1 2 3 4 5; do
-            if curl --fail --silent "http://127.0.0.1:${APP_PORT}/health"; then
-              echo "App is healthy!"
-              exit 0
-            fi
-            echo "Waiting for app to become ready..."
-            sleep 2
-          done
-          echo "App did not become ready in time."
-          exit 1
+            echo "Pulling image: ${ECR_IMAGE}"
+            docker pull "${ECR_IMAGE}"
+
+            docker stop "${CONTAINER_NAME}" || true
+            docker rm "${CONTAINER_NAME}" || true
+
+            docker run -d \
+              --name "${CONTAINER_NAME}" \
+              -p "${APP_PORT}:8000" \
+              --restart unless-stopped \
+              "${ECR_IMAGE}"
+
+            docker ps
+
+            for attempt in 1 2 3 4 5; do
+              if curl --fail --silent "http://127.0.0.1:${APP_PORT}/health"; then
+                echo "App is healthy!"
+                exit 0
+              fi
+              echo "Waiting for app to become ready..."
+              sleep 2
+            done
+            echo "App did not become ready in time."
+            exit 1
+          EOF
 
       - name: Print health response body
-        run: curl --silent "http://127.0.0.1:${APP_PORT}/health"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "${EC2_USER}@${EC2_HOST}" \
+            "curl --silent http://127.0.0.1:${APP_PORT}/health"
