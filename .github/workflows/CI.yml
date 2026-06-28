@@ -1,5 +1,5 @@
 # This workflow packages the verified app.
-name: 03 Build Artifact Workflow
+name: CI phase
 on:
   # Allows students to still trigger it manually from the Actions tab.
   workflow_dispatch:
